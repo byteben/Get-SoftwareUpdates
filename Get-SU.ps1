@@ -27,11 +27,13 @@ Param (
 	[string]$Collection = 'SU_Test'
 )
 #Attempt Connection to Site Server and get Clients from Collection
+#Gets the Collection ID and Stores in a Variable, stores the collection ID in a variable, and then performs a WMI Query using the Collection ID
 Try
 {
 	$ErrorActionPreference = "Stop"
 	$CollectionResult = Get-WmiObject -ComputerName $SiteServer -Namespace ROOT\SMS\Site_$SiteCode -Class SMS_Collection -Filter "Name = '$Collection'"
-	$CollectionResult.Get()
+	$UpdateCollectionID = $CollectionResult.CollectionID
+	$CollectionMembers = Get-WmiObject -ComputerName $SiteServer -NameSpace ROOT\SMS\SITE_$SiteCode -Class SMS_CollectionMember_A -Filter "CollectionID = '$UpdateCollectionID'"
 }
 #If Connection to Site Server fails, or an invalid Collection is specified Write-Host
 Catch
@@ -43,7 +45,9 @@ Catch
 }
 
 #If connection to Site Server is successful and a valid Collection specified add collection members to $Members Object 
-$Members = $CollectionResult.CollectionRules.RuleName
+#Retrieves lists of devices using CollectionMembers.Name 
+
+$Members = $CollectionMembers.Name
 Write-Host "`n---------------------------------------------------------" -ForegroundColor Green
 Write-Host "Attempting Connection to "$Members.Count"Clients in Collection "$Collection":" -ForegroundColor Green
 Write-Host "---------------------------------------------------------" -ForegroundColor Green
