@@ -15,6 +15,9 @@ Original Script
 Version 1.1 (1/1/2019)
 Used Array to store EvaluationStateStatus String in $SoftwareUpdates_Append Object instead of calling an If statement for each option - Thanks @GuyrLeech
 -------
+Version 1.2 (21/03/19)
+$Collection members would only return direct membership clients. Update to work with all collection member types
+-------
 #>
 
 #Set Parameters for Connection
@@ -30,8 +33,7 @@ Param (
 Try
 {
 	$ErrorActionPreference = "Stop"
-	$CollectionResult = Get-WmiObject -ComputerName $SiteServer -Namespace ROOT\SMS\Site_$SiteCode -Class SMS_Collection -Filter "Name = '$Collection'"
-	$CollectionResult.Get()
+	$CollectionResult = get-wmiobject -ComputerName $siteServer -NameSpace "ROOT\SMS\site_$SiteCode" -Class SMS_Collection | where {$_.Name -eq "$Collection"}
 }
 #If Connection to Site Server fails, or an invalid Collection is specified Write-Host
 Catch
@@ -43,11 +45,12 @@ Catch
 }
 
 #If connection to Site Server is successful and a valid Collection specified add collection members to $Members Object 
-$Members = $CollectionResult.CollectionRules.RuleName
+$Members = Get-WmiObject -ComputerName $SiteServer -Credential $cred -Namespace  "ROOT\SMS\site_$SiteCode" -Query "SELECT * FROM SMS_FullCollectionMembership WHERE CollectionID='$($CollectionResult.CollectionID)' order by Name" | select Name
+
 Write-Host "`n---------------------------------------------------------" -ForegroundColor Green
 Write-Host "Attempting Connection to "$Members.Count"Clients in Collection "$Collection":" -ForegroundColor Green
 Write-Host "---------------------------------------------------------" -ForegroundColor Green
-$Members
+Write-Host $Members.Name
 
 #Create Catch Fail Array
 $RPCFailArray = @()
@@ -58,12 +61,12 @@ $SoftwareUpdates = ForEach ($Client in $Members)
 {
 	Try
 	{
-		Get-WmiObject -ComputerName $Client -Namespace "root\ccm\clientSDK" -Class CCM_SoftwareUpdate | Where-Object { $_.ComplianceState -eq "0" } | Select @{ Name = 'Client'; Expression = { $Client } }, Name, ComplianceState, EvaluationState, Deadline, URL -ErrorAction Stop
+		Get-WmiObject -ComputerName $Client.Name -Namespace "root\ccm\clientSDK" -Class CCM_SoftwareUpdate | Where-Object { $_.ComplianceState -eq "0" } | Select @{ Name = 'Client'; Expression = { $Client.Name } }, Name, ComplianceState, EvaluationState, Deadline, URL -ErrorAction Stop
 	}
 	Catch
 	{
 		#If WMI connection fails, add the Client and Exception thrown into an array
-		$RPCFailArray += New-object  PSObject -Property ([ordered]@{ Client = $Client; Exception = $_.Exception.Message })
+		$RPCFailArray += New-object  PSObject -Property ([ordered]@{ Client = $Client.Name; Exception = $_.Exception.Message })
 	}
 	
 }
